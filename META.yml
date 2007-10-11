@@ -1,5 +1,5 @@
 --- 
-abstract: ~
+abstract: a bridge that supports AnyEvent.pm from POE
 author: "& LICENSING"
 build_requires: 
   Test::More: 0.42
@@ -15,4 +15,6 @@ no_index:
     - ex
     - inc
     - t
-version: 0.01
+requires: 
+  POE: 0.9999
+version: 0.02

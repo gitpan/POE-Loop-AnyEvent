@@ -1,5 +1,8 @@
 Revision history for POE-Loop-AnyEvent
-
-0.0.1  Thu Oct 11 00:28:28 2007
+0.02  2007-10-11 01:08
+	  - Fix POD 
+	  - Fix Dependencies
+	  - Remove Perl::Critic tests, it was too critical
+0.01  Thu Oct 11 00:28:28 2007
        Initial release.
 

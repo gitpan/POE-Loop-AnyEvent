@@ -6,7 +6,7 @@ name 'POE-Loop-AnyEvent';
 all_from 'lib/POE/Loop/AnyEvent.pm';
 
 # Specific dependencies
-# requires 'Moose' => '0.25';
+requires 'POE' => '0.9999';
 
 build_requires 'Test::More' => '0.42';
 

@@ -1,5 +1,5 @@
 package POE::Loop::AnyEvent;
-our $VERSION = 0.01;
+our $VERSION = 0.02;
 use strict;
 
 # Include common signal handling.
@@ -147,7 +147,7 @@ sub _loop_event_callback {
     $last_time = time() if TRACE_STATISTICS;
 }
 
-# Event filehandle callback to dispatch selects.
+# AnyEvent filehandle callback to dispatch selects.
 sub _loop_select_callback {
     my $self = $poe_kernel;
 
@@ -195,7 +195,7 @@ __END__
 
 =head1 NAME
 
-POE::Loop::Event - a bridge that supports Event.pm from POE
+POE::Loop::AnyEvent - a bridge that supports AnyEvent.pm from POE
 
 =head1 SYNOPSIS
 
@@ -209,7 +209,7 @@ see L<POE::Loop> for its documentation.
 
 =head1 SEE ALSO
 
-L<POE>, L<POE::Loop>, L<Event>
+L<POE>, L<POE::Loop>, L<AnyEvent>
 
 =head1 AUTHORS & LICENSING
 

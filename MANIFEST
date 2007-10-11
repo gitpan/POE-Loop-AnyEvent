@@ -42,6 +42,5 @@ t/loops/anyevent/wheel_sf_tcp.t
 t/loops/anyevent/wheel_sf_udp.t
 t/loops/anyevent/wheel_sf_unix.t
 t/loops/anyevent/wheel_tail.t
-t/perlcritic.t
 t/pod-coverage.t
 t/pod.t
