@@ -1,16 +1,94 @@
-# Load the Module::Install bundled in ./inc/
-use inc::Module::Install;
+use warnings;
+use strict;
+use ExtUtils::MakeMaker;
+use POE::Test::Loops;
 
-# Define metadata
-name 'POE-Loop-AnyEvent';
-all_from 'lib/POE/Loop/AnyEvent.pm';
+# Switch to default behavior if STDIN isn't a tty.
 
-# Specific dependencies
-requires 'POE' => '0.9999';
+unless (-t STDIN) {
+  warn(
+    "\n",
+    "=============================================\n\n",
+    "STDIN is not a terminal.  Assuming --default.\n\n",
+    "=============================================\n\n",
+  );
+  push @ARGV, "--default";
+}
 
-build_requires 'Test::More' => '0.42';
+# Remind the user she can use --default.
 
-no_index 'directory' => 'ex';
+unless (grep /^--default$/, @ARGV) {
+  warn(
+    "\n",
+    "=============================================\n\n",
+    "Prompts may be bypassed by running:\n",
+    "   $^X $0 --default\n\n",
+    "=============================================\n\n",
+  );
+}
 
-auto_install;
-WriteAll;
+# Should we skip the network tests?
+
+my $prompt = (
+  "Some of POE::Loop::AnyEvent's tests require a\n" .
+  "functional network.  You can skip these network\n" .
+  "tests if you'd like.\n\n" .
+  "Would you like to skip the network tests?"
+);
+
+my $ret = "n";
+if (grep /^--default$/, @ARGV) {
+  print $prompt, " [$ret] $ret\n\n";
+}
+else {
+  $ret = prompt($prompt, "n");
+}
+
+my $marker = 'run_network_tests';
+unlink $marker;
+unless ($ret =~ /^Y$/i) {
+  open(TOUCH,"+>$marker") and close TOUCH;
+}
+
+print "\n";
+
+POE::Test::Loops::generate( 't', [ 'POE::Loop::AnyEvent' ], 1 );
+
+WriteMakefile(
+  NAME            => 'POE::Loop::AnyEvent',
+  AUTHOR          => 'Chris Williams <chris@bingosnet.co.uk>',
+  ABSTRACT        => 'AnyEvent event loop support for POE.',
+  VERSION_FROM    => 'lib/POE/Loop/AnyEvent.pm',
+  META_ADD        => {
+    resources     => {
+      license     => 'http://dev.perl.org/licenses/',
+      repository  => (
+        'https://poe.svn.sourceforge.net/svnroot/poe/trunk/polo-gtk'
+      ),
+    },
+  },
+  dist            => {
+    COMPRESS      => 'gzip -9f',
+    SUFFIX        => 'gz',
+  },
+  clean           => { FILES => 't/poe_loop_anyevent/*.t t/poe_loop_anyevent ' . $marker },
+  test            => { TESTS => 't/*.t t/poe_loop_anyevent/*.t' },
+
+  CONFIGURE_REQUIRES => {
+    'ExtUtils::MakeMaker' => 0,
+    'POE::Test::Loops'    => 1.035,
+  },
+
+  META_MERGE      => {
+    build_requires => {
+      'POE::Test::Loops'    => 1.035,
+    },
+  },
+
+  PREREQ_PM       => {
+    'POE'               => 1.289,
+    'AnyEvent'          => 0,
+  },
+);
+
+1;

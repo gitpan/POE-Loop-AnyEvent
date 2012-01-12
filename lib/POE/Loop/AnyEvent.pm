@@ -1,219 +1,258 @@
 package POE::Loop::AnyEvent;
-our $VERSION = 0.02;
-use strict;
+{
+  $POE::Loop::AnyEvent::VERSION = '0.002';
+}
+# vim: ts=2 sw=2 expandtab
 
-# Include common signal handling.
+#ABSTRACT: AnyEvent event loop support for POE
+
+use strict;
+use warnings;
+
 use POE::Loop::PerlSignals;
 
-use vars qw($VERSION);
-$VERSION =
-  do { my ($r) = ( q$Revision: 2126 $ =~ /(\d+)/ ); sprintf "1.%04d", $r };
-
-# Everything plugs into POE::Kernel.
-package POE::Kernel;
+package # Hide from Pause
+  POE::Kernel;
 
 use strict;
+use warnings;
 
+# According to Paul Evans (IO::Async guy) we should make AnyEvent try
+# and detect a loop early before it retardedly tries to load AE::Impl::POE
+use AnyEvent;
+BEGIN {
+  # Remove POE from AnyEvent's list of available models.  AnyEvent may
+  # try to load POE since it's available.  This wreaks havoc on
+  # things.  Common problems include (a) unexpected re-entrancy in POE
+  # initialization; (b) deep recursion as POE tries to dispatch its
+  # events with itself.
+
+  @AnyEvent::models = grep { $_->[1] !~ /\bPOE\b/ } @AnyEvent::models;
+  AnyEvent::detect();
+}
+
+use constant ANYEVENT_6 => $AnyEvent::VERSION >= 6;
+
+my $loop;
 my $_watcher_timer;
-my @fileno_watcher;
+my $_idle_timer;
 my %signal_watcher;
-
-#------------------------------------------------------------------------------
-# Loop construction and destruction.
+my %handle_watchers;
 
 sub loop_initialize {
-    my $self = shift;
-
-    $_watcher_timer = AnyEvent->timer(
-        cb    => \&_loop_event_callback,
-        after => 0,
-    );
 }
 
 sub loop_finalize {
-    my $self = shift;
-
-    foreach my $fd ( 0 .. $#fileno_watcher ) {
-        next unless defined $fileno_watcher[$fd];
-        foreach my $mode ( MODE_RD, MODE_WR, MODE_EX ) {
-            POE::Kernel::_warn(
-"Mode $mode watcher for fileno $fd is defined during loop finalize"
-            ) if defined $fileno_watcher[$fd]->[$mode];
-        }
-    }
-
-    $self->loop_ignore_all_signals();
+  my $self = shift;
 }
-
-#------------------------------------------------------------------------------
-# Signal handler maintenance functions.
-
-sub loop_attach_uidestroy {
-
-    # does nothing
-}
-
-#------------------------------------------------------------------------------
-# Maintain time watchers.
-
-sub loop_resume_time_watcher {
-    my ( $self, $next_time ) = @_;
-    ( $_watcher_timer and $next_time ) or return;
-    $_watcher_timer->at($next_time);
-    $_watcher_timer->start();
-}
-
-sub loop_reset_time_watcher {
-    my ( $self, $next_time ) = @_;
-    $_watcher_timer or return;
-    $self->loop_pause_time_watcher();
-    $self->loop_resume_time_watcher($next_time);
-}
-
-sub loop_pause_time_watcher {
-    $_watcher_timer or return;
-    $_watcher_timer->stop();
-}
-
-#------------------------------------------------------------------------------
-# Maintain filehandle watchers.
-
-sub loop_watch_filehandle {
-    my ( $self, $handle, $mode ) = @_;
-    my $fileno = fileno($handle);
-
-    # Overwriting a pre-existing watcher?
-    if ( defined $fileno_watcher[$fileno]->[$mode] ) {
-        $fileno_watcher[$fileno]->[$mode]->cancel();
-        undef $fileno_watcher[$fileno]->[$mode];
-    }
-
-    $fileno_watcher[$fileno]->[$mode] = AnyEvent->io(
-        fd   => $fileno,
-        poll => (
-            ( $mode == MODE_RD ) ? 'r'
-            : (
-                ( $mode == MODE_WR ) ? 'w'
-                : 'e'
-            )
-        ),
-        cb => \&_loop_select_callback,
-    );
-}
-
-sub loop_ignore_filehandle {
-    my ( $self, $handle, $mode ) = @_;
-    my $fileno = fileno($handle);
-
-    # Don't bother removing a select if none was registered.
-    if ( defined $fileno_watcher[$fileno]->[$mode] ) {
-        $fileno_watcher[$fileno]->[$mode]->cancel();
-        undef $fileno_watcher[$fileno]->[$mode];
-    }
-}
-
-sub loop_pause_filehandle {
-    my ( $self, $handle, $mode ) = @_;
-    my $fileno = fileno($handle);
-    $fileno_watcher[$fileno]->[$mode]->stop();
-}
-
-sub loop_resume_filehandle {
-    my ( $self, $handle, $mode ) = @_;
-    my $fileno = fileno($handle);
-    $fileno_watcher[$fileno]->[$mode]->start();
-}
-
-# Timer callback to dispatch events.
-
-my $last_time = time();
-
-sub _loop_event_callback {
-    my $self = $poe_kernel;
-
-    if (TRACE_STATISTICS) {
-
-        # TODO - I'm pretty sure the startup time will count as an unfair
-        # amount of idleness.
-        #
-        # TODO - Introducing many new time() syscalls.  Bleah.
-        $self->_data_stat_add( 'idle_seconds', time() - $last_time );
-    }
-
-    $self->_data_ev_dispatch_due();
-    $self->_test_if_kernel_is_idle();
-
-    # Transferring control back to AnyEvent; this is idle time.
-    $last_time = time() if TRACE_STATISTICS;
-}
-
-# AnyEvent filehandle callback to dispatch selects.
-sub _loop_select_callback {
-    my $self = $poe_kernel;
-
-    my $event   = shift;
-    my $watcher = $event->w;
-    my $fileno  = $watcher->fd;
-    my $mode    = (
-        ( $event->got eq 'r' ) ? MODE_RD
-        : (
-            ( $event->got eq 'w' ) ? MODE_WR
-            : (
-                ( $event->got eq 'e' ) ? MODE_EX
-                : return
-            )
-        )
-    );
-
-    $self->_data_handle_enqueue_ready( $mode, $fileno );
-    $self->_test_if_kernel_is_idle();
-}
-
-#------------------------------------------------------------------------------
-# The event loop itself.
 
 sub loop_do_timeslice {
-    AnyEvent::one_event();
 }
 
 sub loop_run {
-    my $self = shift;
-    while ( $self->_data_ses_count() ) {
-        $self->loop_do_timeslice();
-    }
+  my $self = shift;
+  # Avoid a hang when trying to run an idle Kernel.
+  $self->_test_if_kernel_is_idle();
+  ( $loop = AnyEvent->condvar )->recv;
 }
 
 sub loop_halt {
-    $_watcher_timer->stop();
-    $_watcher_timer = undef;
-    AnyEvent::unloop_all(0);
+  $loop->send;
+}
+
+sub loop_watch_filehandle {
+  my ($self, $handle, $mode) = @_;
+  my $fileno = fileno($handle);
+
+  if ($mode == MODE_RD) {
+
+  $handle_watchers{watch_r}{$handle} = AnyEvent->io(
+      fh   => $handle,
+      poll => 'r',
+      cb   =>
+        sub {
+          my $self = $poe_kernel;
+          if (TRACE_FILES) {
+            POE::Kernel::_warn "<fh> got read callback for $handle";
+          }
+          $self->_data_handle_enqueue_ready(MODE_RD, $fileno);
+          $self->_test_if_kernel_is_idle();
+          return 0;
+        },
+    );
+
+  }
+  elsif ($mode == MODE_WR) {
+
+  $handle_watchers{watch_w}{$handle} = AnyEvent->io(
+      fh   => $handle,
+      poll => 'w',
+      cb   =>
+        sub {
+          my $self = $poe_kernel;
+          if (TRACE_FILES) {
+            POE::Kernel::_warn "<fh> got write callback for $handle";
+          }
+          $self->_data_handle_enqueue_ready(MODE_WR, $fileno);
+          $self->_test_if_kernel_is_idle();
+          return 0;
+        },
+    );
+
+  }
+  else {
+    confess "AnyEvent::io does not support expedited filehandles";
+  }
+}
+
+sub loop_ignore_filehandle {
+  my ($self, $handle, $mode) = @_;
+  my $fileno = fileno($handle);
+
+  if ( $mode == MODE_EX ) {
+    confess "AnyEvent::io does not support expedited filehandles";
+  }
+
+  delete $handle_watchers{ $mode == MODE_RD ? 'watch_r' : 'watch_w' }{$handle};
+}
+
+sub loop_pause_filehandle {
+  shift->loop_ignore_filehandle(@_);
+}
+
+sub loop_resume_filehandle {
+  shift->loop_watch_filehandle(@_);
+}
+
+sub loop_resume_time_watcher {
+  my ($self, $next_time) = @_;
+  return unless defined $next_time;
+  $next_time -= time();
+  $next_time = 0 if $next_time < 0;
+  $_watcher_timer = AnyEvent->timer( after => $next_time, cb => \&_loop_event_callback);
+}
+
+sub loop_reset_time_watcher {
+  my ($self, $next_time) = @_;
+  undef $_watcher_timer;
+  $self->loop_resume_time_watcher($next_time);
+}
+
+sub _loop_resume_timer {
+  undef $_idle_timer;
+  $poe_kernel->loop_resume_time_watcher($poe_kernel->get_next_event_time());
+}
+
+sub loop_pause_time_watcher {
+}
+
+# Event callback to dispatch pending events.
+
+sub _loop_event_callback {
+  my $self = $poe_kernel;
+
+  $self->_data_ev_dispatch_due();
+  $self->_test_if_kernel_is_idle();
+
+  undef $_watcher_timer;
+
+  # Register the next timeout if there are events left.
+  if ($self->get_event_count()) {
+    $_idle_timer = AnyEvent->idle( cb => \&_loop_resume_timer );
+  }
+
+  return 0;
 }
 
 1;
 
+
 __END__
+=pod
 
 =head1 NAME
 
-POE::Loop::AnyEvent - a bridge that supports AnyEvent.pm from POE
+POE::Loop::AnyEvent - AnyEvent event loop support for POE
+
+=head1 VERSION
+
+version 0.002
 
 =head1 SYNOPSIS
 
-See L<POE::Loop>.
+  use POE qw( Loop::AnyEvent );
+
+  # The rest of your program goes here.
+  # There should be little or no changes necessary.
+  # All POE APIs and most modules should work with no changes.
 
 =head1 DESCRIPTION
 
-This class is an implementation of the abstract POE::Loop interface.
-It follows POE::Loop's public interface exactly.  Therefore, please
-see L<POE::Loop> for its documentation.
+POE::Loop::AnyEvent replaces POE's default select() event loop with
+AnyEvent.  This allows POE programs to transparently use most of the
+event loops AnyEvent can provide.
+
+POE::Loop::AnyEvent changes POE's internal implementation without
+altering its APIs.  By design, nearly all software that are already
+uses POE should continue to work normally without any changes.
+
+=head2 Conflicts
+
+It may seem obvious, but AnyEvent::Impl::POE and POE::Loop::AnyEvent
+are mutually exclusive of one another.  Using both would result in a
+deadlock as each event system called upon the other in infinite
+recursion.
+
+This deadlock also affects AnyEvent's support of Wx and Prima.
+AnyEvent doesn't natively support these event loops.  Instead it takes
+advantage of POE's more flexible, comprehensive, and open event loop
+abstractions.
+
+=head2 Callbacks from AnyEvent to POE
+
+POE::Session's callback() and postback() methods simplify callbacks
+from plain-coderef systems like Tk and AnyEvent to POE's named event
+handlers.  Please see L<POE::Session> for more details.
+
+=head2 Private Methods
+
+POE::Loop::AnyEvent implements the private POE::Loop API.  Please see
+L<POE::Loop> for an explanation of that API, especially if you'd like
+to publish support for a new event loop.  POE is structured so that
+new event loops can be supported without core distribution changes.
+
+Also see L<POE::Test::Loops> for over 35 test files and more than 490
+tests you can use for free when writing new POE::Loop modules.
+
+=for poe_tests sub skip_tests {
+  $ENV{POE_EVENT_LOOP} = "POE::Loop::AnyEvent";
+  return;
+}
 
 =head1 SEE ALSO
 
-L<POE>, L<POE::Loop>, L<AnyEvent>
+L<POE>
 
-=head1 AUTHORS & LICENSING
+L<POE::Kernel>
 
-Please see L<POE> for more information about authors, contributors,
-and POE's licensing.
+L<POE::Session>
+
+L<POE::Loop>
+
+L<POE::Test::Loops>
+
+L<AnyEvent>
+
+=head1 AUTHOR
+
+Chris Williams <chris@bingosnet.co.uk>
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is copyright (c) 2012 by Chris Williams.
+
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
 
 =cut
+

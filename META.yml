@@ -1,20 +1,24 @@
---- 
-abstract: a bridge that supports AnyEvent.pm from POE
-author: "& LICENSING"
-build_requires: 
-  Test::More: 0.42
-distribution_type: module
-generated_by: Module::Install version 0.67
-license: unknown
-meta-spec: 
-  url: http://module-build.sourceforge.net/META-spec-v1.3.html
-  version: 1.3
+---
+abstract: 'AnyEvent event loop support for POE'
+author:
+  - 'Chris Williams <chris@bingosnet.co.uk>'
+build_requires:
+  POE::Test::Loops: 1.035
+configure_requires:
+  ExtUtils::MakeMaker: 6.30
+  POE::Test::Loops: 1.035
+dynamic_config: 0
+generated_by: 'Dist::Zilla version 4.300006, CPAN::Meta::Converter version 2.113640'
+license: perl
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
 name: POE-Loop-AnyEvent
-no_index: 
-  directory: 
-    - ex
-    - inc
-    - t
-requires: 
-  POE: 0.9999
-version: 0.02
+requires:
+  AnyEvent: 0
+  POE: 1.289
+  perl: v5.6.0
+resources:
+  homepage: https://github.com/bingos/poe-loop-anyevent
+  repository: https://github.com/bingos/poe-loop-anyevent.git
+version: 0.002
