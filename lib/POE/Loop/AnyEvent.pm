@@ -1,6 +1,6 @@
 package POE::Loop::AnyEvent;
 {
-  $POE::Loop::AnyEvent::VERSION = '0.002';
+  $POE::Loop::AnyEvent::VERSION = '0.004';
 }
 # vim: ts=2 sw=2 expandtab
 
@@ -166,8 +166,8 @@ sub _loop_event_callback {
 
 1;
 
-
 __END__
+
 =pod
 
 =head1 NAME
@@ -176,7 +176,7 @@ POE::Loop::AnyEvent - AnyEvent event loop support for POE
 
 =head1 VERSION
 
-version 0.002
+version 0.004
 
 =head1 SYNOPSIS
 
@@ -249,10 +249,9 @@ Chris Williams <chris@bingosnet.co.uk>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2012 by Chris Williams.
+This software is copyright (c) 2013 by Chris Williams.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
 
 =cut
-
